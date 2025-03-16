@@ -8,16 +8,26 @@ import OrderHistory from './components/OrderHistory';
 import Modal from 'react-modal';
 import './App.css';
 
-Modal.setAppElement('#root'); // Đặt root element cho modal
+Modal.setAppElement('#root');
 
 const App = () => {
   const [cartItems, setCartItems] = useState([]);
   const [userName, setUserName] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(true); // Mở modal khi khởi động
+  const [isModalOpen, setIsModalOpen] = useState(true);
   const orderHistoryRef = useRef(null);
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
-    // Kiểm tra xem đã có tên người dùng trong localStorage chưa
+    let storedUserId = localStorage.getItem('userId');
+    if (!storedUserId) {
+      storedUserId = Date.now().toString();
+      localStorage.setItem('userId', storedUserId);
+      console.log('Tạo mới userId:', storedUserId);
+    } else {
+      console.log('Sử dụng userId hiện tại:', storedUserId);
+    }
+    setUserId(storedUserId);
+
     const savedName = localStorage.getItem('userName');
     if (savedName) {
       setUserName(savedName);
@@ -61,23 +71,37 @@ const App = () => {
       alert('Vui lòng nhập tên trước khi đặt món!');
       return;
     }
+    if (!userId) {
+      console.error('userId không tồn tại khi đặt hàng!');
+      alert('Có lỗi xảy ra. Vui lòng thử lại!');
+      return;
+    }
     const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    await addDoc(collection(db, 'orders'), {
+    const orderData = {
       items: cartItems,
       total,
       status: 'Đã nhận',
       timestamp: new Date(),
-      userName: userName, // Lưu tên người đặt
-    });
-    setCartItems([]);
-    alert('Đặt món thành công!');
-    orderHistoryRef.current.scrollIntoView({ behavior: 'smooth' });
+      userName: userName,
+      userId: userId,
+    };
+    console.log('Đơn hàng được gửi với userId:', userId, JSON.stringify(orderData, null, 2));
+    try {
+      const docRef = await addDoc(collection(db, 'orders'), orderData);
+      console.log('Đơn hàng đã được lưu với ID:', docRef.id, 'và userId:', userId);
+      setCartItems([]);
+      alert('Đặt món thành công!');
+      orderHistoryRef.current.scrollIntoView({ behavior: 'smooth' });
+    } catch (error) {
+      console.error('Lỗi khi lưu đơn hàng:', error);
+      alert('Có lỗi xảy ra khi đặt món. Vui lòng thử lại!');
+    }
   };
 
   const handleSubmitName = (e) => {
     e.preventDefault();
     if (userName.trim()) {
-      localStorage.setItem('userName', userName); // Lưu tên vào localStorage
+      localStorage.setItem('userName', userName);
       setIsModalOpen(false);
     } else {
       alert('Vui lòng nhập tên!');
@@ -88,7 +112,7 @@ const App = () => {
     <div className="App">
       <Modal
         isOpen={isModalOpen}
-        onRequestClose={() => {}} // Không cho phép đóng modal bằng cách nhấp ra ngoài
+        onRequestClose={() => {}}
         style={{
           content: {
             top: '50%',
@@ -126,7 +150,7 @@ const App = () => {
           />
           <Cart cartItems={cartItems} onPlaceOrder={onPlaceOrder} />
           <div ref={orderHistoryRef}>
-            <OrderHistory />
+            <OrderHistory userId={userId} />
           </div>
         </>
       )}
